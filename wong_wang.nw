@@ -1,0 +1,428 @@
+@ This is the first version of my implementation of the Wong-Wang model 
+described in Wong-Wang 2006
+
+The headers included are: the standard input-library, the 
+standard library, the library of mathematical functions, 
+and the time library. 
+
+<<headers>>=
+#include <stdio.h>
+#include <stdlib.h>
+#include <math.h>
+#include <time.h>
+
+@ We need also the headers for the gnu scientific library in 
+order to use vectors and matrices. 
+
+<<gsl headers>>=
+#include <gsl/gsl_vector.h>
+#include <gsl/gsl_matrix.h>
+#include <gsl/gsl_rng.h>
+#include <gsl/gsl_randist.h>
+
+#define MAXSIZE 5000*10000
+
+@ We define three structures: \textit{io\_parameters},
+\textit{kinectic\_parameteres}, and \textit{synaptic\_couplings}. 
+Those structures contains the values for the parameters of the input-output 
+function, the kinectic of the system and the synaptic couplings.
+The last one is only composed of one member, since we are only interested 
+in the dynamics of one population.
+
+<<input output>>=
+typedef struct{
+	double a;
+	double b;
+	double d;
+}io_parameters;
+
+<<kinectic>>=
+typedef struct{
+	double gamma;
+	double tau_S;
+	double tau_AMPA;
+}kinectic_parameters;
+
+<<synaptic>>=
+typedef struct{
+	double J1;
+}synaptic_couplings;
+
+@ To integrate the differential equation
+\begin{align*}
+	\frac{\mathrm{d}S}{\mathrm{d}t} &= -\frac{S}{\tau_S} + (1 - S)\gamma H(S),
+\end{align*}
+we use the Heun's method. 
+
+The Heun's method for calculating the numerical solution to the initial value problem is:
+
+\begin{align*}
+	\dot{y}(t) &= f(t,y(t)\\
+	y(t_0) &= y_0, 
+\end{align*}
+
+to first calculate the intermediate value $\tilde{y_{i+1}}$ and the final approximation $y_{i+1}$ at the 
+next integration point.
+
+\begin{align*}
+	\tilde{y_{i+1}} &= y_i + h f(t_i,y_i) \\
+	y_{i+1} &= y_i + \frac{h}{2} (f(t_i,y_i) + f(t_{i+1}, \tilde{y_{i+1}}))
+\end{align*}
+
+The function \textit{S\_dot} implements  the differential equation:
+<<s dot>>=
+double S_dot(double S, kinectic_parameters p, double H)
+{
+	double r;
+	r = -S/p.tau_S + (1 - S)*p.gamma*H;
+		
+return  r;
+}
+
+@ And the function \textit{heun} integrates using Heun's method.
+
+<<heun>>=
+double heun(double y, double h, kinectic_parameters p, io_parameters io, 
+		synaptic_couplings sc, double H, double I0)
+{
+	double r = 0, y_tilde = 0, x = 0, H_tilde = 0;
+
+	y_tilde = y + h*S_dot(y,p,H); 
+	x 		= sc.J1*y_tilde + I0;
+	H_tilde = input_output(io, x);
+	r 		= y + h/2.0*(S_dot(y,p,H) + S_dot(y_tilde,p,H_tilde));
+
+	return r;
+}
+
+@ In order to understand the behavior of the differential equation $\frac{\mathrm{d}S}{\mathrm{d}t} = -\frac{S}{\tau_S} +
+(1 - S)\gamma H(S)$,  we decided to start analysing the differential equation $\frac{\mathrm{d}S}{\mathrm{d}t} = -\frac{S}{\tau_S}$. 
+Therefore
+
+\begin{align*}
+	\frac{\mathrm{d}S}{\mathrm{d}t} &= -\frac{S}{\tau_S}\\
+	\frac{\mathrm{d}S}{S} &= -\frac{\mathrm{d}t}{\tau_S}\\
+	\int{\frac{\mathrm{d}S}{S}} &= -\int{\frac{\mathrm{d}t}{\tau_S}}\\
+	\ln{S(t)} &= -\frac{t}{\tau_S} + C\\
+	S(t) &= \exp(-\frac{t}{\tau_S} + C) \\
+	S(t) &= \exp(-\frac{t}{\tau_S})\exp(C) \\
+	S(t) &= \exp(-\frac{t}{\tau_S})C_0
+\end{align*}
+
+In this case the function $S$ tends to $0$ as $t$ increases $ \lim_{t \to +\inf} S(t) = 0$.
+
+Next, we considered the case in which the firing rate is constant.  For convenience I took $H(x) + 1$.
+Therefore, the differential equation is written as: $\frac{\mathrm{d}S}{\mathrm{d}t} = -\frac{S}{\tau_S} + (1 - S)\gamma$.
+We solved analytically as follows:
+ 
+\begin{align*}
+	\frac{\mathrm{d}S}{\mathrm{d}t} &= -\frac{S}{\tau_S} + (1 - S)\gamma\\
+	\frac{\mathrm{d}S}{\mathrm{d}t} &= -\frac{S}{\tau_S} + \gamma  -S\gamma\\
+	\frac{\mathrm{d}S}{\mathrm{d}t} &= -(\frac{1}{\tau_S} + \gamma)S  + \gamma\\
+	\frac{\mathrm{d}S}{\mathrm{d}t} &= -(\frac{1 + \gamma \tau_S }{\tau_S})S  + \gamma\\
+	\frac{\mathrm{d}S}{\mathrm{d}t}  + (\frac{1 + \gamma \tau_S }{\tau_S})S  &= \gamma\\
+	\frac{\mathrm{d}S}{\mathrm{d}t}\exp(\frac{1 + \gamma \tau_S }{\tau_S}t) + (\frac{1 + \gamma \tau_S }{\tau_S})S  &= \gamma \exp(\frac{1 + \gamma \tau_S }{\tau_S}t)\\
+	\int{\mathrm{d}{S\exp(\frac{1 + \gamma \tau_S }{\tau_S})}}  &= \int{\gamma \exp(\frac{1 + \gamma \tau_S }{\tau_S})\mathrm{d}t}\\
+	S\exp(\frac{1 + \gamma \tau_S }{\tau_S})  &= \frac{\gamma \exp(\frac{1 + \gamma \tau_S }{\tau_S})}{\frac{1 + \gamma \tau_S}{\tau_S}} + C \\
+	S\exp(\frac{1 + \gamma \tau_S }{\tau_S})  &= \frac{\tau_S \gamma \exp(\frac{1 + \gamma \tau_S }{\tau_S})}{1 + \gamma \tau_S} + C \\
+	S &= \exp(-\frac{1 + \gamma \tau_S }{\tau_S}) \left( \frac{\tau_S \gamma \exp(\frac{1 + \gamma \tau_S }{\tau_S})}{1 + \gamma \tau_S} + C \right)
+\end{align*}
+
+
+We use a simplified input\_output function \textit{H(x)} which has an indeterminate form when $x = 0.04$. 
+Therefore we defined the function as:
+
+\begin{align*}
+	H(x) &= \begin{cases}
+				0.5x + \frac{1}{d} &\mbox{if } x < 1^{-6} \\
+				\frac{ax -b}{1 - \exp(-d(ax -b)}) &\mbox{else}
+			\end{cases}
+\end{align*}
+
+which is implemented in the function \textit{input\_output}
+
+<<f-i function>>=
+double input_output(io_parameters p, double x)
+{
+	double numerator = 0, denominator = 0;
+
+	numerator 	= p.a*x - p.b;
+	if(fabs(p.d*numerator)<1e-6)
+		return .5*numerator + 1./p.d;
+	else
+	{ 
+		denominator	= 1 - exp(-p.d*numerator);
+		return numerator/denominator;
+	}
+}
+
+@ We use a function to load a Connectivity Matrix into a gsl\_ matrix.  
+The function name is \textit{fread\_matrix}
+
+<<read matrix>>=
+gsl_matrix * fread_matrix(char *filename, int *rows, int *cols)
+{
+	FILE *fi;
+	int r, c, rc, n;
+	double temp;
+	gsl_matrix *m;
+	
+	fi = fopen(filename, "r");
+	if(fi == NULL)
+	{
+		printf("Cannot open \"%s\"\n", filename);
+		return(NULL);
+	}
+
+	rc = (*rows) * (*cols);
+	
+	if(*rows <= 0 || *cols <= 0 || rc > MAXSIZE)
+	{
+		printf("Read invalid row and/or column from first line from \"%s\" (max size = %d).\n", 
+		filename, MAXSIZE);
+		return(NULL);
+	}
+	
+	m = gsl_matrix_alloc(*rows, *cols);
+	if(m == NULL)
+	{
+		printf("Cannot allocate a matrix with %d elements (%d rows and %d cols).",
+			rc, *rows, *cols);
+		return(NULL);
+	}
+
+	n = 0;
+	r = c = 0;
+	while (fscanf(fi, "%lf", &temp) != EOF)
+	{
+		n++;
+		gsl_matrix_set(m, r, c, temp);
+		c++;
+		if(c >= *cols)
+		{
+			c = 0;
+			r++;
+			if(r >= *rows)
+				break;
+		}
+	}
+		
+	if(n != rc)
+	{
+		printf("Error: Expected %d elements for %d x %d matrix, but read %d!\n",
+			rc, *rows, *cols, n);	
+		return(NULL);
+	}
+	fclose(fi);
+
+	return(m);
+}
+
+@ We also use a function to print a matrix to a file.
+
+<<fprint matrix>>=
+void fprint_matrix(const gsl_matrix *m, char *filename, int *rows, int *cols)
+{
+	int r, c;
+	FILE *fo;
+
+    fo = fopen(filename, "w");
+
+    if(fo == NULL)
+    {
+        fprintf(stderr, "Cannot open \"%s\"!\n", filename);
+        exit(-1);
+    }
+
+    for(r = 0; r < *rows; r++)
+    {
+        for(c = 0; c < *cols; c++)
+        {
+            fprintf(fo, "%.8e,", gsl_matrix_get(m, r, c));
+        }
+        fprintf(fo, "\n");
+    }
+	
+	fclose(fo);
+}
+
+
+@ And finally the main program:
+<<main program>>=
+int main(int argc, char *argv[])
+{
+	double dt, R, tspan;
+
+	if(argc < 4)
+	{
+		printf("Not enough arguments!\n");
+		exit(-1);
+	}
+
+	dt 		= atof(argv[1]);
+	R		= atof(argv[2]);
+	tspan 	= atof(argv[3]);
+
+	int regions = 66;
+	clock_t tStart = clock();
+
+	char name[] = "HumCon.dat", fname[50];
+
+	const gsl_rng_type *T;
+	gsl_rng *r;
+
+	gsl_rng_env_setup();
+
+	T = gsl_rng_default;
+	r = gsl_rng_alloc(T);
+
+	gsl_rng_set(r, time(NULL));
+		
+	io_parameters iop ={.a = 270, .b = 108, .d = 0.154};
+	kinectic_parameters kp = {.gamma = 0.641, .tau_S = 100, .tau_AMPA = 2};
+	synaptic_couplings sc = {.J1 = 0.2609};
+
+
+	double  N = tspan/dt, //  dt = pow(2,-9), R = 2,
+			L = N/R, Dt = R*dt,
+			sigma = .002, scf = 0,
+			I0 = 0.1;
+
+	sprintf(fname, "fr_scf=%.2f", scf);
+	FILE *f = fopen(fname, "w");
+	sprintf(fname, "nmda_scf=%.2f", scf);
+	FILE *g = fopen(fname, "w");
+	sprintf(fname, "max_min_scf=%.2f", scf);
+	FILE *q = fopen(fname, "w");
+
+	for(scf = 0; scf < 0.1; scf +=0.05)
+	{ 	
+	for(int trials=0; trials < 1000; trials++)
+	{
+	gsl_matrix *dW	= gsl_matrix_alloc(N, regions);
+	gsl_matrix *C	= fread_matrix(name, &regions, &regions);
+	
+	fprint_matrix(C, "gsl_matrix.csv", &regions, &regions);
+
+	for(int i = 0; i < regions; i++)
+	{
+		for(int j = 0; j < N; j++)
+		{
+			gsl_matrix_set(dW, j, i, sqrt(dt)*gsl_ran_gaussian(r,1));
+		}
+	}
+
+	gsl_matrix *IN	= gsl_matrix_alloc(L, regions);
+	gsl_matrix *S 	= gsl_matrix_alloc(L, regions);
+	gsl_vector *X   = gsl_vector_alloc(regions);
+	gsl_vector *H   = gsl_vector_alloc(regions);
+
+	for(int i = 0; i < regions; i++)
+	{
+		gsl_matrix_set(S, 0, i, 0.3*gsl_rng_uniform(r));
+		gsl_matrix_set(IN, 0, i, 0);
+		gsl_vector_set(X, i, sc.J1*gsl_matrix_get(S, i, 0)  + I0 +  
+					 gsl_matrix_get(IN, i, 0)); 
+
+		gsl_vector_set(H, i, input_output(iop, gsl_vector_get(X, i))); 
+	}	
+
+	fprintf(f, "%5e,", 0.);
+	fprintf(g, "%5e,", 0.);
+	
+	for(int i = 0; i < regions; i++)
+	{ 	
+		fprintf(f,"%.5e,", gsl_vector_get(H,i));
+		fprintf(g,"%.5e,", gsl_matrix_get(S,0,i));
+	}
+	
+	fprintf(f, "\n");
+	fprintf(g, "\n");
+
+	for(int i = 1; i < L; i++)
+	{
+		if(i % (int) (1./Dt + 0.5) == 0)
+		{
+			fprintf(f,"%.5e,", i*Dt);
+		}
+		for(int j = 0; j < regions; j++)
+		{
+			double Winc 	= 0,
+					old_S  = 0; 
+
+			Winc = gsl_matrix_get(dW, R*(i-1), j) + gsl_matrix_get(dW, R*i, j);
+
+			old_S = gsl_matrix_get(S, i-1, j);
+	 		
+			gsl_matrix_set(S, i, j, heun(old_S, Dt, kp, iop, sc, gsl_vector_get(H, j), I0));
+
+			if (gsl_matrix_get(S, i, j) > 1)
+				gsl_matrix_set(S, i, j, 1);
+
+
+			gsl_matrix_set(IN, i, j, gsl_matrix_get(IN, i-1, j) 
+					- dt*gsl_matrix_get(IN, i-1, j)/kp.tau_AMPA + 
+						1./sqrt(kp.tau_AMPA)*sigma*Winc);
+
+		}
+		for(int j = 0; j < regions; j++)
+		{
+			double RI = 0;
+			
+			for(int k = 0; k < regions; k++)
+			{
+				if(k != j)
+				{
+					double w = gsl_matrix_get(C, j, k);
+					RI += scf*w*gsl_matrix_get(S,i,k);
+				}
+			}		
+	
+			gsl_vector_set(X, j, sc.J1*gsl_matrix_get(S, i, j)  + I0 +  
+						RI + gsl_matrix_get(IN, i, j)); 
+
+			gsl_vector_set(H, j, input_output(iop, gsl_vector_get(X, j))); 
+
+			if(i % (int) (1./Dt + 0.5) == 0){
+				fprintf(f,"%.5e,", gsl_vector_get(H, j));
+				fprintf(g,"%.5e,", gsl_matrix_get(S, i, j));
+			}
+		}
+		if(i % (int) (1./Dt + 0.5) == 0)
+		{
+			fprintf(f,"\n");
+			fprintf(g,"\n");
+		}
+	}
+	
+	
+	fprintf(q, "%.5e,%.5e,%.5e\n", scf, gsl_vector_min(H), gsl_vector_max(H));
+	
+	gsl_matrix_free(IN);
+	gsl_matrix_free(S);
+	gsl_matrix_free(dW);
+	gsl_vector_free(X);
+	gsl_vector_free(H);
+	}
+	}	
+	fclose(f);
+	fclose(g);
+	fclose(q);
+
+	printf("Time taken: %lf.\n", (double)(clock() - tStart)/CLOCKS_PER_SEC);
+
+	return 0;
+}
+
+<<*>>=
+	<<headers>>
+	<<gsl headers>>
+	<<input output>>
+	<<kinectic>>
+	<<synaptic>>
+	<<f-i function>>
+	<<s dot>>
+	<<heun>>
+	<<read matrix>>
+	<<fprint matrix>>
+	<<main program>>
