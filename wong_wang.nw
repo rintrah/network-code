@@ -305,7 +305,7 @@ int main(int argc, char *argv[])
 			sigma = .002, scf,
 			I0 = 0.1;
 
-	for(scf = 0.2; scf < 0.25; scf +=0.05)
+	for(scf = 0; scf < 1.05; scf +=0.05)
 	{ 	
 	gsl_matrix *AM	= gsl_matrix_alloc(regions, n_trials);
 
@@ -318,7 +318,7 @@ int main(int argc, char *argv[])
 	//sprintf(fname, "noise_scf=%.2f", scf);
 	//FILE *n = fopen(fname, "w");
 
-	for(int trials=0; trials < 10; trials++)
+	for(int trials=0; trials < 1000; trials++)
 	{
 	gsl_matrix *C	= fread_matrix(name, &regions, &regions);
 	
@@ -332,7 +332,7 @@ int main(int argc, char *argv[])
 
 	for(int i = 0; i < regions; i++)
 	{
-		gsl_matrix_set(S, 0, i, 0.3*gsl_rng_uniform(r));
+		gsl_matrix_set(S, 0, i, 0.1*gsl_rng_uniform(r));
 		//gsl_matrix_set(IN, 0, i, sigma*gsl_ran_gaussian_ziggurat(r,1));
 		gsl_vector_set(X, i, sc.J1*gsl_matrix_get(S, i, 0)  + I0);  
 					// +  gsl_matrix_get(IN, i, 0)); 
