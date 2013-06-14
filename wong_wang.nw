@@ -297,14 +297,16 @@ int main(int argc, char *argv[])
 	gsl_rng_set(r, time(NULL));
 		
 	io_parameters iop ={.a = 270, .b = 108, .d = 0.154};
-	kinectic_parameters kp = {.gamma = 0.641, .tau_S = 100, .tau_AMPA = 200};
+	kinectic_parameters kp = {.gamma = 0.641, .tau_S = 100, .tau_AMPA = 2};
 	synaptic_couplings sc = {.J1 = 0.2609};
 
 
 	double  L = tspan/dt, //  dt = pow(2,-9), R = 2,
-			sigma = .002, scf = 0.2,
+			sigma = .002, scf,
 			I0 = 0.1;
 
+	for(scf = 0.2; scf < 0.25; scf +=0.05)
+	{ 	
 	gsl_matrix *AM	= gsl_matrix_alloc(regions, n_trials);
 
 	sprintf(fname, "fr_scf=%.2f", scf);
@@ -313,11 +315,9 @@ int main(int argc, char *argv[])
 	//FILE *g = fopen(fname, "w");
 	sprintf(fname, "max_min_scf=%.2f", scf);
 	FILE *q = fopen(fname, "w");
-	sprintf(fname, "noise_scf=%.2f", scf);
-	FILE *n = fopen(fname, "w");
+	//sprintf(fname, "noise_scf=%.2f", scf);
+	//FILE *n = fopen(fname, "w");
 
-	/*for(scf = 0; scf < 0.1; scf +=0.05)
-	{*/ 	
 	for(int trials=0; trials < 10; trials++)
 	{
 	gsl_matrix *C	= fread_matrix(name, &regions, &regions);
@@ -325,7 +325,7 @@ int main(int argc, char *argv[])
 	//fprint_matrix(C, "gsl_matrix.csv", &regions, &regions);
 
 
-	gsl_matrix *IN	= gsl_matrix_alloc(L, regions);
+	//gsl_matrix *IN	= gsl_matrix_alloc(L, regions);
 	gsl_matrix *S 	= gsl_matrix_alloc(L, regions);
 	gsl_vector *X   = gsl_vector_alloc(regions);
 	gsl_vector *H   = gsl_vector_alloc(regions);
@@ -333,27 +333,27 @@ int main(int argc, char *argv[])
 	for(int i = 0; i < regions; i++)
 	{
 		gsl_matrix_set(S, 0, i, 0.3*gsl_rng_uniform(r));
-		gsl_matrix_set(IN, 0, i, sigma*gsl_ran_gaussian(r,1));
-		gsl_vector_set(X, i, sc.J1*gsl_matrix_get(S, i, 0)  + I0 +  
-					 gsl_matrix_get(IN, i, 0)); 
+		//gsl_matrix_set(IN, 0, i, sigma*gsl_ran_gaussian_ziggurat(r,1));
+		gsl_vector_set(X, i, sc.J1*gsl_matrix_get(S, i, 0)  + I0);  
+					// +  gsl_matrix_get(IN, i, 0)); 
 
 		gsl_vector_set(H, i, input_output(iop, gsl_vector_get(X, i))); 
  	}	
 
 	fprintf(f, "%5e,", 0.);
 	//fprintf(g, "%5e,", 0.);
-	fprintf(n, "%5e,", 0.);
+	//fprintf(n, "%5e,", 0.);
 	
 	for(int i = 0; i < regions; i++)
 	{ 	
 		fprintf(f,"%.5e,", gsl_vector_get(H,i));
 		//fprintf(g,"%.5e,", gsl_matrix_get(S,0,i));
-		fprintf(n,"%.5e,", gsl_matrix_get(IN,0,i));
+		//fprintf(n,"%.5e,", gsl_matrix_get(IN,0,i));
  	} 
 	
 	fprintf(f, "\n");
 	//fprintf(g, "\n");
-	fprintf(n, "\n");
+	//fprintf(n, "\n");
 
 	for(int i = 1; i < L; i++)
 	{
@@ -361,7 +361,7 @@ int main(int argc, char *argv[])
  		{
 			fprintf(f,"%.5e,", i*dt);
 			//fprintf(g,"%.5e,", i*dt);
-			fprintf(n,"%.5e,", i*dt);
+			//fprintf(n,"%.5e,", i*dt);
  		}
 		for(int j = 0; j < regions; j++)
  		{
@@ -375,9 +375,9 @@ int main(int argc, char *argv[])
 				gsl_matrix_set(S, i, j, 1);
 
 
-			gsl_matrix_set(IN, i, j, gsl_matrix_get(IN, i-1, j) 
+			/*gsl_matrix_set(IN, i, j, gsl_matrix_get(IN, i-1, j) 
 					+ noise_dot(kp, gsl_matrix_get(IN, i-1, j), dt, sigma, 
-                    gsl_ran_gaussian(r,1))); 
+                    gsl_ran_gaussian(r,1))); */
 
 		}
 		for(int j = 0; j < regions; j++)
@@ -393,22 +393,22 @@ int main(int argc, char *argv[])
 	 			}
 			}		
 	
-			gsl_vector_set(X, j, sc.J1*gsl_matrix_get(S, i, j)  + I0 +  
-						RI + gsl_matrix_get(IN, i, j)); 
+			gsl_vector_set(X, j, sc.J1*gsl_matrix_get(S, i, j)  + I0 +  RI); 
+                    //+ gsl_matrix_get(IN, i, j)); 
 
 			gsl_vector_set(H, j, input_output(iop, gsl_vector_get(X, j))); 
 
 			if(i % (int) (1./dt + 0.5) == 0){
 				fprintf(f,"%.5e,", gsl_vector_get(H, j));
 				//fprintf(g,"%.5e,", gsl_matrix_get(S, i, j));
-				fprintf(n,"%.5e,", gsl_matrix_get(IN, i, j));
+				//fprintf(n,"%.5e,", gsl_matrix_get(IN, i, j));
 			}
 		}
 		if(i % (int) (1./dt + 0.5) == 0)
  		{
 			fprintf(f,"\n");
 			//fprintf(g,"\n");
-			fprintf(n,"\n");
+			//fprintf(n,"\n");
 		}
  	}
 	
@@ -456,11 +456,11 @@ int main(int argc, char *argv[])
             else*/
                 ang_cos = fabs(dot_prod/(norm_v*norm_u));
 
-            printf("norm of v  = %.5f, norm of u  = %.5f, dot product  = %.5f, and cosine = %.5f.\n", 
-                    norm_v, norm_u, dot_prod, ang_cos);
+            /*printf("norm of v  = %.5f, norm of u  = %.5f, dot product  = %.5f, and cosine = %.5f.\n", 
+                    norm_v, norm_u, dot_prod, ang_cos);*/
 
             //if(ang_cos >= 0 && ang_cos <= 0.1)
-            if(fabs(ang_cos) < 1e-6)
+            if(fabs(ang_cos) < 2)
             {
                 flag = 1;
             }
@@ -470,7 +470,7 @@ int main(int argc, char *argv[])
 
     if(flag == 1)
     {
-        printf("Adding a new attractor.\n");
+        //printf("Adding a new attractor.\n");
         for(int j = 0; j < regions; j++)
         {
             gsl_matrix_set(AM, j,  n_attractors, gsl_vector_get(H,j));
@@ -479,19 +479,22 @@ int main(int argc, char *argv[])
         flag = 0;
     }
 
-	gsl_matrix_free(IN);
+	//gsl_matrix_free(IN);
 	gsl_matrix_free(S);
 	gsl_vector_free(X);
 	gsl_vector_free(H);
 	//}
 	}	
+	sprintf(fname, "attractors_matrix_scf=%.2f", scf);
+	fprint_matrix(AM, fname, &regions, &n_attractors);
 	gsl_matrix_free(AM);
 	fclose(f);
 	//fclose(g);
 	fclose(q);
-	fclose(n);
+	//fclose(n);
+    }
 
-    printf("The number of attractors is: %d.\n", n_attractors);
+    //printf("The number of attractors is: %d.\n", n_attractors);
 
 	printf("Time taken: %lf.\n", (double)(clock() - tStart)/CLOCKS_PER_SEC);
 
