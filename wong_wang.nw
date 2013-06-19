@@ -158,7 +158,7 @@ double input_output(io_parameters p, double x)
 }
 
 @ Our system have noise and we described it as an Ornstein-Uhlenbeck process:
-\begin{aling*}
+\begin{align*}
     \tau_{AMPA}\frac{\mathrm{d}I_{noise}(t)}{\mathrm{d}t} &= -I_{noise}(t) + \eta(t)\sqrt{\tau_{AMPA} \sigma_{noise}^2}
 \end{align*}
 where $\sigma_{noise}^2$ is the variance of the noise, and $\eta$ is a Gaussian white noise with zero mean and unit variance.
@@ -281,7 +281,7 @@ int main(int argc, char *argv[])
 	dt 		= atof(argv[1]);
 	tspan 	= atof(argv[2]);
 
-	int regions = 66, n_attractors = 0, n_trials = 100, flag = 0;
+	int regions = 66, n_attractors = 0, n_trials = 1000, flag = 0;
 	clock_t tStart = clock();
 
 	char name[] = "HumCon.dat", fname[50];
@@ -297,17 +297,22 @@ int main(int argc, char *argv[])
 	gsl_rng_set(r, time(NULL));
 		
 	io_parameters iop ={.a = 270, .b = 108, .d = 0.154};
-	kinectic_parameters kp = {.gamma = 0.641, .tau_S = 100, .tau_AMPA = 2};
+	kinectic_parameters kp = {.gamma = 0.641/1000.,    // We divide by 1000 in order to express everything in milliseconds.
+                 .tau_S = 100, .tau_AMPA = 2};
 	synaptic_couplings sc = {.J1 = 0.2609};
 
 
 	double  L = tspan/dt, //  dt = pow(2,-9), R = 2,
 			sigma = .002, scf,
-			I0 = 0.1;
+			I0 = 0.32;
 
-	for(scf = 0; scf < 1.05; scf +=0.05)
+	gsl_matrix *C	= fread_matrix(name, &regions, &regions);
+	//fprint_matrix(C, "gsl_matrix.csv", &regions, &regions);
+
+	for(scf = 0; scf < 2.7 ; scf += 0.1)
 	{ 	
-	gsl_matrix *AM	= gsl_matrix_alloc(regions, n_trials);
+	gsl_matrix *AM	    = gsl_matrix_alloc(regions, n_trials);
+	gsl_matrix *NMDA	= gsl_matrix_alloc(regions, n_trials);
 
 	sprintf(fname, "fr_scf=%.2f", scf);
 	FILE *f = fopen(fname, "w");
@@ -318,11 +323,8 @@ int main(int argc, char *argv[])
 	//sprintf(fname, "noise_scf=%.2f", scf);
 	//FILE *n = fopen(fname, "w");
 
-	for(int trials=0; trials < 1000; trials++)
+	for(int trials = 0; trials < n_trials; trials++)
 	{
-	gsl_matrix *C	= fread_matrix(name, &regions, &regions);
-	
-	//fprint_matrix(C, "gsl_matrix.csv", &regions, &regions);
 
 
 	//gsl_matrix *IN	= gsl_matrix_alloc(L, regions);
@@ -332,7 +334,7 @@ int main(int argc, char *argv[])
 
 	for(int i = 0; i < regions; i++)
 	{
-		gsl_matrix_set(S, 0, i, 0.1*gsl_rng_uniform(r));
+		gsl_matrix_set(S, 0, i, gsl_rng_uniform(r));
 		//gsl_matrix_set(IN, 0, i, sigma*gsl_ran_gaussian_ziggurat(r,1));
 		gsl_vector_set(X, i, sc.J1*gsl_matrix_get(S, i, 0)  + I0);  
 					// +  gsl_matrix_get(IN, i, 0)); 
@@ -421,6 +423,7 @@ int main(int argc, char *argv[])
         for(int i = 0; i < regions; i++)
         {
             gsl_matrix_set(AM, i, 0, gsl_vector_get(H,i));
+            gsl_matrix_set(NMDA, i, 0, gsl_matrix_get(S,L-1,i));
         }
         n_attractors++;
     }
@@ -474,6 +477,7 @@ int main(int argc, char *argv[])
         for(int j = 0; j < regions; j++)
         {
             gsl_matrix_set(AM, j,  n_attractors, gsl_vector_get(H,j));
+            gsl_matrix_set(NMDA, j, n_attractors, gsl_matrix_get(S,L-1,j));
         }
         n_attractors++;
         flag = 0;
@@ -488,12 +492,17 @@ int main(int argc, char *argv[])
 	sprintf(fname, "attractors_matrix_scf=%.2f", scf);
 	fprint_matrix(AM, fname, &regions, &n_attractors);
 	gsl_matrix_free(AM);
+	sprintf(fname, "nmda_matrix_scf=%.2f", scf);
+	fprint_matrix(NMDA, fname, &regions, &n_attractors);
+	gsl_matrix_free(NMDA);
 	fclose(f);
 	//fclose(g);
 	fclose(q);
 	//fclose(n);
+    n_attractors = 0;
     }
 
+	gsl_matrix_free(C);
     //printf("The number of attractors is: %d.\n", n_attractors);
 
 	printf("Time taken: %lf.\n", (double)(clock() - tStart)/CLOCKS_PER_SEC);
