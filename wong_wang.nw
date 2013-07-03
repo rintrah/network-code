@@ -304,22 +304,22 @@ int main(int argc, char *argv[])
 
 
 	// double dt = pow(2,-9), R = 2,
-	double  sigma = .002, scf,
-			I0 = 0.32;
+	double  sigma = .02, scf,
+			I0 = 0.3;
 
 	gsl_matrix *C	= fread_matrix(name, &regions, &regions);
 	//fprint_matrix(C, "gsl_matrix.csv", &regions, &regions);
 
-	for(scf = 0; scf > -0.2 ; scf -= 0.01)
+	for(scf = 0.35; scf <= .35 ; scf += 0.025)
 	{ 	
 	gsl_matrix *AM	    = gsl_matrix_alloc(regions, n_trials);
 	gsl_matrix *NMDA	= gsl_matrix_alloc(regions, n_trials);
 
-	sprintf(fname, "fr_scf=%.2f", scf);
+	sprintf(fname, "fr_scf=%.3f", scf);
 	FILE *f = fopen(fname, "w");
 	//sprintf(fname, "nmda_scf=%.2f", scf);
 	//FILE *g = fopen(fname, "w");
-	sprintf(fname, "max_min_scf=%.2f", scf);
+	sprintf(fname, "max_min_scf=%.3f", scf);
 	FILE *q = fopen(fname, "w");
 	//sprintf(fname, "noise_scf=%.2f", scf);
 	//FILE *n = fopen(fname, "w");
@@ -335,8 +335,8 @@ int main(int argc, char *argv[])
 
 	for(int i = 0; i < regions; i++)
 	{
-		//gsl_matrix_set(S, 0, i, 0.3*gsl_rng_uniform(r));
-		gsl_matrix_set(S, 0, i, 0.5*gsl_rng_uniform(r) + 0.5);
+		gsl_matrix_set(S, 0, i, gsl_rng_uniform(r));
+		//gsl_matrix_set(S, 0, i, gsl_rng_uniform(r) + 0.5);
 		//gsl_matrix_set(IN, 0, i, sigma*gsl_ran_gaussian_ziggurat(r,1));
 		gsl_vector_set(X, i, sc.J1*gsl_matrix_get(S, i, 0)  + I0);  
 					// +  gsl_matrix_get(IN, i, 0)); 
@@ -397,8 +397,8 @@ int main(int argc, char *argv[])
 	 			}
 			}		
 	
-			gsl_vector_set(X, j, sc.J1*gsl_matrix_get(S, i, j)  + I0 +  RI); 
-                    //+ gsl_matrix_get(IN, i, j)); 
+			gsl_vector_set(X, j, sc.J1*gsl_matrix_get(S, i, j)  + I0 +  RI );
+                   // + gsl_matrix_get(IN, i, j)); 
 
 			gsl_vector_set(H, j, input_output(iop, gsl_vector_get(X, j))); 
 
@@ -433,10 +433,10 @@ int main(int argc, char *argv[])
 	gsl_vector_free(H);
 	//}
 	}	
-	sprintf(fname, "attractors_matrix_scf=%.2f", scf);
+	sprintf(fname, "attractors_matrix_scf=%.3f", scf);
 	fprint_matrix(AM, fname, &regions, &n_attractors);
 	gsl_matrix_free(AM);
-	sprintf(fname, "nmda_matrix_scf=%.2f", scf);
+	sprintf(fname, "nmda_matrix_scf=%.3f", scf);
 	fprint_matrix(NMDA, fname, &regions, &n_attractors);
 	gsl_matrix_free(NMDA);
 	fclose(f);
