@@ -282,7 +282,7 @@ int main(int argc, char *argv[])
 	tspan 	= atof(argv[2]);
 
 	int regions = 66, n_attractors = 0, 
-            n_trials = 100, L = ceil(tspan/dt);
+            n_trials = 1, L = ceil(tspan/dt);
 	clock_t tStart = clock();
 
 	char name[] = "HumCon.dat", fname[50];
@@ -304,22 +304,23 @@ int main(int argc, char *argv[])
 
 
 	// double dt = pow(2,-9), R = 2,
-	double  sigma = .02, scf,
+	double  sigma = .08, scf,
 			I0 = 0.3;
 
 	gsl_matrix *C	= fread_matrix(name, &regions, &regions);
 	//fprint_matrix(C, "gsl_matrix.csv", &regions, &regions);
 
-	for(scf = 0.35; scf <= .35 ; scf += 0.025)
+	for(scf = 0.25; scf <= .45 ; scf += 0.2){
+	for(sigma = 0.02; sigma <= .08; sigma *= 2.)
 	{ 	
 	gsl_matrix *AM	    = gsl_matrix_alloc(regions, n_trials);
 	gsl_matrix *NMDA	= gsl_matrix_alloc(regions, n_trials);
 
-	sprintf(fname, "fr_scf=%.3f", scf);
+	sprintf(fname, "fr_scf=%.3f_sigma=%.3f", scf, sigma);
 	FILE *f = fopen(fname, "w");
 	//sprintf(fname, "nmda_scf=%.2f", scf);
 	//FILE *g = fopen(fname, "w");
-	sprintf(fname, "max_min_scf=%.3f", scf);
+	sprintf(fname, "max_min_scf=%.3f_sigma=%.3f", scf, sigma);
 	FILE *q = fopen(fname, "w");
 	//sprintf(fname, "noise_scf=%.2f", scf);
 	//FILE *n = fopen(fname, "w");
@@ -328,7 +329,7 @@ int main(int argc, char *argv[])
 	{
 
 
-	//gsl_matrix *IN	= gsl_matrix_alloc(L + 1, regions);
+	gsl_matrix *IN	= gsl_matrix_alloc(L + 1, regions);
 	gsl_matrix *S 	= gsl_matrix_alloc(L + 1, regions);
 	gsl_vector *X   = gsl_vector_alloc(regions);
 	gsl_vector *H   = gsl_vector_alloc(regions);
@@ -337,9 +338,9 @@ int main(int argc, char *argv[])
 	{
 		gsl_matrix_set(S, 0, i, gsl_rng_uniform(r));
 		//gsl_matrix_set(S, 0, i, gsl_rng_uniform(r) + 0.5);
-		//gsl_matrix_set(IN, 0, i, sigma*gsl_ran_gaussian_ziggurat(r,1));
-		gsl_vector_set(X, i, sc.J1*gsl_matrix_get(S, i, 0)  + I0);  
-					// +  gsl_matrix_get(IN, i, 0)); 
+		gsl_matrix_set(IN, 0, i, sigma*gsl_ran_gaussian_ziggurat(r,1));
+		gsl_vector_set(X, i, sc.J1*gsl_matrix_get(S, i, 0)  + I0  
+					 +  gsl_matrix_get(IN, i, 0)); 
 
 		gsl_vector_set(H, i, input_output(iop, gsl_vector_get(X, i))); 
  	}	
@@ -379,9 +380,9 @@ int main(int argc, char *argv[])
 				gsl_matrix_set(S, i, j, 1);
 
 
-			/*gsl_matrix_set(IN, i, j, gsl_matrix_get(IN, i-1, j) 
+			gsl_matrix_set(IN, i, j, gsl_matrix_get(IN, i-1, j) 
 					+ noise_dot(kp, gsl_matrix_get(IN, i-1, j), dt, sigma, 
-                    gsl_ran_gaussian(r,1))); */
+                    gsl_ran_gaussian(r,1))); 
 
 		}
 		for(int j = 0; j < regions; j++)
@@ -397,8 +398,8 @@ int main(int argc, char *argv[])
 	 			}
 			}		
 	
-			gsl_vector_set(X, j, sc.J1*gsl_matrix_get(S, i, j)  + I0 +  RI );
-                   // + gsl_matrix_get(IN, i, j)); 
+			gsl_vector_set(X, j, sc.J1*gsl_matrix_get(S, i, j)  + I0 +  RI 
+                    + gsl_matrix_get(IN, i, j)); 
 
 			gsl_vector_set(H, j, input_output(iop, gsl_vector_get(X, j))); 
 
@@ -427,16 +428,16 @@ int main(int argc, char *argv[])
     }
     n_attractors++;
 
-	//gsl_matrix_free(IN);
+	gsl_matrix_free(IN);
 	gsl_matrix_free(S);
 	gsl_vector_free(X);
 	gsl_vector_free(H);
 	//}
 	}	
-	sprintf(fname, "attractors_matrix_scf=%.3f", scf);
+	sprintf(fname, "attractors_matrix_scf=%.3f_sigma=%.3f", scf, sigma);
 	fprint_matrix(AM, fname, &regions, &n_attractors);
 	gsl_matrix_free(AM);
-	sprintf(fname, "nmda_matrix_scf=%.3f", scf);
+	sprintf(fname, "nmda_matrix_scf=%.3f_sigma=%.3f", scf, sigma);
 	fprint_matrix(NMDA, fname, &regions, &n_attractors);
 	gsl_matrix_free(NMDA);
 	fclose(f);
@@ -445,7 +446,7 @@ int main(int argc, char *argv[])
 	//fclose(n);
     n_attractors = 0;
     }
-
+    }
 	gsl_matrix_free(C);
     //printf("The number of attractors is: %d.\n", n_attractors);
 
