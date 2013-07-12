@@ -269,17 +269,19 @@ void fprint_matrix(const gsl_matrix *m, char *filename, int *rows, int *cols)
 <<main program>>=
 int main(int argc, char *argv[])
 {
-	double dt, tspan;
+	double dt, tspan, sigma, scf;
 
-	if(argc < 3)
+	if(argc < 5)
 	{
 		printf("Not enough arguments!\n");
-		printf("Arguments: time step time span.\n");
+		printf("Arguments: time step time span scaling factor noise level.\n");
 		exit(-1);
 	} 
 
 	dt 		= atof(argv[1]);
 	tspan 	= atof(argv[2]);
+	scf 	= atof(argv[3]);
+	sigma 	= atof(argv[4]);
 
 	int regions = 66, n_attractors = 0, 
             n_trials = 1, L = ceil(tspan/dt);
@@ -299,20 +301,16 @@ int main(int argc, char *argv[])
 		
 	io_parameters iop ={.a = 270, .b = 108, .d = 0.154};
 	kinectic_parameters kp = {.gamma = 0.641/1000.,    // We divide by 1000 in order to express everything in milliseconds.
-                 .tau_S = 100, .tau_AMPA = 2};
+                 .tau_S = 100, .tau_AMPA = 2}; 
 	synaptic_couplings sc = {.J1 = 0.2609};
 
 
 	// double dt = pow(2,-9), R = 2,
-	double  sigma = .08, scf,
-			I0 = 0.3;
+	double I0 = 0.3;
 
 	gsl_matrix *C	= fread_matrix(name, &regions, &regions);
 	//fprint_matrix(C, "gsl_matrix.csv", &regions, &regions);
 
-	for(scf = 0.25; scf <= .45 ; scf += 0.2){
-	for(sigma = 0.02; sigma <= .08; sigma *= 2.)
-	{ 	
 	gsl_matrix *AM	    = gsl_matrix_alloc(regions, n_trials);
 	gsl_matrix *NMDA	= gsl_matrix_alloc(regions, n_trials);
 
@@ -339,11 +337,11 @@ int main(int argc, char *argv[])
 		gsl_matrix_set(S, 0, i, gsl_rng_uniform(r));
 		//gsl_matrix_set(S, 0, i, gsl_rng_uniform(r) + 0.5);
 		gsl_matrix_set(IN, 0, i, sigma*gsl_ran_gaussian_ziggurat(r,1));
-		gsl_vector_set(X, i, sc.J1*gsl_matrix_get(S, i, 0)  + I0  
-					 +  gsl_matrix_get(IN, i, 0)); 
+		gsl_vector_set(X, i, sc.J1*gsl_matrix_get(S, 0, i)  + I0  
+					 +  gsl_matrix_get(IN, 0, i)); 
 
 		gsl_vector_set(H, i, input_output(iop, gsl_vector_get(X, i))); 
- 	}	
+ 	} 	
 
 	fprintf(f, "%5e,", 0.);
 	//fprintf(g, "%5e,", 0.);
@@ -425,7 +423,7 @@ int main(int argc, char *argv[])
     {
         gsl_matrix_set(AM, i, n_attractors, gsl_vector_get(H,i));
         gsl_matrix_set(NMDA, i, n_attractors, gsl_matrix_get(S,L,i));
-    }
+     }
     n_attractors++;
 
 	gsl_matrix_free(IN);
@@ -445,8 +443,7 @@ int main(int argc, char *argv[])
 	fclose(q);
 	//fclose(n);
     n_attractors = 0;
-    }
-    }
+
 	gsl_matrix_free(C);
     //printf("The number of attractors is: %d.\n", n_attractors);
 
