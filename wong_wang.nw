@@ -343,13 +343,13 @@ int main(int argc, char *argv[])
 		gsl_vector_set(H, i, input_output(iop, gsl_vector_get(X, i))); 
  	} 	
 
-	fprintf(f, "%5e,", 0.);
+	fprintf(f, "%5e\t", 0.);
 	//fprintf(g, "%5e,", 0.);
 	//fprintf(n, "%5e,", 0.);
 	
 	for(int i = 0; i < regions; i++)
 	{ 	
-		fprintf(f,"%.5e,", gsl_vector_get(H,i));
+		fprintf(f,"%.5e\t", gsl_vector_get(H,i));
 		//fprintf(g,"%.5e,", gsl_matrix_get(S,0,i));
 		//fprintf(n,"%.5e,", gsl_matrix_get(IN,0,i));
  	} 
@@ -362,7 +362,7 @@ int main(int argc, char *argv[])
 	{
 		if(i % (int) (1./dt + 0.5) == 0)
  		{
-			fprintf(f,"%.5e,", i*dt);
+			fprintf(f,"%.5e\t", i*dt);
 			//fprintf(g,"%.5e,", i*dt);
 			//fprintf(n,"%.5e,", i*dt);
  		}
@@ -402,7 +402,7 @@ int main(int argc, char *argv[])
 			gsl_vector_set(H, j, input_output(iop, gsl_vector_get(X, j))); 
 
 			if(i % (int) (1./dt + 0.5) == 0){
-				fprintf(f,"%.5e,", gsl_vector_get(H, j));
+				fprintf(f,"%.5e\t", gsl_vector_get(H, j));
 				//fprintf(g,"%.5e,", gsl_matrix_get(S, i, j));
 				//fprintf(n,"%.5e,", gsl_matrix_get(IN, i, j));
 			}
@@ -416,7 +416,7 @@ int main(int argc, char *argv[])
  	}
 	
 	
-	fprintf(q, "%.5e,%.5e,%.5e\n", scf, gsl_vector_min(H), gsl_vector_max(H));
+	fprintf(q, "%.5e\t%.5e\t%.5e\n", scf, gsl_vector_min(H), gsl_vector_max(H));
     //printf("Trial number %d and there are %d attractors.\n", trials, n_attractors);    
 
     for(int i = 0; i < regions; i++)
