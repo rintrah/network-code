@@ -41,7 +41,6 @@ typedef struct{
 typedef struct{
 	double gamma;
 	double tau_S;
-	double tau_AMPA;
 }kinectic_parameters;
 
 <<synaptic>>=
@@ -75,7 +74,7 @@ The function \textit{S\_dot} implements  the differential equation:
 double S_dot(double S, kinectic_parameters p, double H)
 {
 	double r;
-	r = -S/p.tau_S + (1 - S)*p.gamma*H;
+	r = -S/p.tau_S + (1. - S)*p.gamma*H;
 		
 return  r;
 }
@@ -84,16 +83,17 @@ return  r;
 
 <<heun>>=
 double heun(double y, double h, kinectic_parameters p, io_parameters io, 
-		synaptic_couplings sc, double H, double I0)
+		synaptic_couplings sc, double H, double I0, double sigma, double noise) 
 {
 	double r = 0, y_tilde = 0, x = 0, H_tilde = 0;
 
-	y_tilde = y + h*S_dot(y,p,H); 
+	y_tilde = y + h*S_dot(y,p,H) + sigma*noise; 
 	x 		= sc.J1*y_tilde + I0;
 	H_tilde = input_output(io, x);
-	r 		= y + h/2.0*(S_dot(y,p,H) + S_dot(y_tilde,p,H_tilde));
+	r 		= y + h/2.0*(S_dot(y,p,H) + S_dot(y_tilde,p,H_tilde)) + sigma*noise;
 
 	return r;
+    //return y_tilde;
 }
 
 @ In order to understand the behavior of the differential equation $\frac{\mathrm{d}S}{\mathrm{d}t} = -\frac{S}{\tau_S} +
@@ -162,19 +162,9 @@ double input_output(io_parameters p, double x)
     \tau_{AMPA}\frac{\mathrm{d}I_{noise}(t)}{\mathrm{d}t} &= -I_{noise}(t) + \eta(t)\sqrt{\tau_{AMPA} \sigma_{noise}^2}
 \end{align*}
 where $\sigma_{noise}^2$ is the variance of the noise, and $\eta$ is a Gaussian white noise with zero mean and unit variance.
+This last paragraph needs to be written again.
 
-<<noise dot>>=
-double noise_dot(kinectic_parameters kp, double I, double dt, double sigma, double ran_var)
-{
-    double drift, diffusion;
-    drift       = -dt/kp.tau_AMPA * I;
-    diffusion   = sigma*sqrt(dt)/sqrt(kp.tau_AMPA)*ran_var;
-
-    return drift + diffusion;
-}
-
-
-@ We use a function to load a Connectivity Matrix into a gsl\_ matrix.  
+We use a function to load a Connectivity Matrix into a gsl\_ matrix.  
 The function name is \textit{fread\_matrix}
 
 <<read matrix>>=
@@ -283,7 +273,7 @@ int main(int argc, char *argv[])
 	scf 	= atof(argv[3]);
 	sigma 	= atof(argv[4]);
 
-	int regions = 66, n_attractors = 0, 
+	int regions = 66, //n_attractors = 0, 
             n_trials = 1, L = ceil(tspan/dt);
 	clock_t tStart = clock();
 
@@ -301,7 +291,7 @@ int main(int argc, char *argv[])
 		
 	io_parameters iop ={.a = 270, .b = 108, .d = 0.154};
 	kinectic_parameters kp = {.gamma = 0.641/1000.,    // We divide by 1000 in order to express everything in milliseconds.
-                 .tau_S = 100, .tau_AMPA = 2}; 
+                 .tau_S = 100}; 
 	synaptic_couplings sc = {.J1 = 0.2609};
 
 
@@ -311,15 +301,15 @@ int main(int argc, char *argv[])
 	gsl_matrix *C	= fread_matrix(name, &regions, &regions);
 	//fprint_matrix(C, "gsl_matrix.csv", &regions, &regions);
 
-	gsl_matrix *AM	    = gsl_matrix_alloc(regions, n_trials);
-	gsl_matrix *NMDA	= gsl_matrix_alloc(regions, n_trials);
+	//gsl_matrix *AM	    = gsl_matrix_alloc(regions, n_trials);
+	//gsl_matrix *NMDA	= gsl_matrix_alloc(regions, n_trials);
 
 	sprintf(fname, "fr_scf=%.3f_sigma=%.3f", scf, sigma);
 	FILE *f = fopen(fname, "w");
 	//sprintf(fname, "nmda_scf=%.2f", scf);
 	//FILE *g = fopen(fname, "w");
-	sprintf(fname, "max_min_scf=%.3f_sigma=%.3f", scf, sigma);
-	FILE *q = fopen(fname, "w");
+	//sprintf(fname, "max_min_scf=%.3f_sigma=%.3f", scf, sigma);
+	//FILE *q = fopen(fname, "w");
 	//sprintf(fname, "noise_scf=%.2f", scf);
 	//FILE *n = fopen(fname, "w");
 
@@ -327,7 +317,6 @@ int main(int argc, char *argv[])
 	{
 
 
-	gsl_matrix *IN	= gsl_matrix_alloc(L + 1, regions);
 	gsl_matrix *S 	= gsl_matrix_alloc(L + 1, regions);
 	gsl_vector *X   = gsl_vector_alloc(regions);
 	gsl_vector *H   = gsl_vector_alloc(regions);
@@ -336,22 +325,21 @@ int main(int argc, char *argv[])
 	{
 		gsl_matrix_set(S, 0, i, gsl_rng_uniform(r));
 		//gsl_matrix_set(S, 0, i, gsl_rng_uniform(r) + 0.5);
-		gsl_matrix_set(IN, 0, i, sigma*gsl_ran_gaussian_ziggurat(r,1));
-		gsl_vector_set(X, i, sc.J1*gsl_matrix_get(S, 0, i)  + I0  
-					 +  gsl_matrix_get(IN, 0, i)); 
-
+		gsl_vector_set(X, i, sc.J1*gsl_matrix_get(S, 0, i)  + I0); 
 		gsl_vector_set(H, i, input_output(iop, gsl_vector_get(X, i))); 
  	} 	
 
-	fprintf(f, "%5e\t", 0.);
+	//fprintf(f, "%5e\t", 0.);
+	fprintf(f, "%.4f\t", 0.);
 	//fprintf(g, "%5e,", 0.);
 	//fprintf(n, "%5e,", 0.);
 	
 	for(int i = 0; i < regions; i++)
 	{ 	
-		fprintf(f,"%.5e\t", gsl_vector_get(H,i));
+		//fprintf(f,"%.5e\t", gsl_vector_get(H,i));
+		//fprintf(f,"%.4f\t", gsl_vector_get(H,i));
 		//fprintf(g,"%.5e,", gsl_matrix_get(S,0,i));
-		//fprintf(n,"%.5e,", gsl_matrix_get(IN,0,i));
+		fprintf(f,"%.4f\t", gsl_matrix_get(S,0,i));
  	} 
 	
 	fprintf(f, "\n");
@@ -362,25 +350,22 @@ int main(int argc, char *argv[])
 	{
 		if(i % (int) (1./dt + 0.5) == 0)
  		{
-			fprintf(f,"%.5e\t", i*dt);
+			//fprintf(f,"%.5e\t", i*dt);
+			fprintf(f,"%.4f\t", i*dt);
 			//fprintf(g,"%.5e,", i*dt);
 			//fprintf(n,"%.5e,", i*dt);
  		}
 		for(int j = 0; j < regions; j++)
  		{
 			double old_S  = 0; 
+		    double noise = sqrt(dt)*gsl_ran_gaussian(r,1);
 
 			old_S = gsl_matrix_get(S, i-1, j);
 	 		
-			gsl_matrix_set(S, i, j, heun(old_S, dt, kp, iop, sc, gsl_vector_get(H, j), I0));
+			gsl_matrix_set(S, i, j, heun(old_S, dt, kp, iop, sc, gsl_vector_get(H, j), I0, sigma, noise));
 
 			if (gsl_matrix_get(S, i, j) > 1)
 				gsl_matrix_set(S, i, j, 1);
-
-
-			gsl_matrix_set(IN, i, j, gsl_matrix_get(IN, i-1, j) 
-					+ noise_dot(kp, gsl_matrix_get(IN, i-1, j), dt, sigma, 
-                    gsl_ran_gaussian(r,1))); 
 
 		}
 		for(int j = 0; j < regions; j++)
@@ -396,15 +381,14 @@ int main(int argc, char *argv[])
 	 			}
 			}		
 	
-			gsl_vector_set(X, j, sc.J1*gsl_matrix_get(S, i, j)  + I0 +  RI 
-                    + gsl_matrix_get(IN, i, j)); 
+			gsl_vector_set(X, j, sc.J1*gsl_matrix_get(S, i, j)  + I0 +  RI);
 
 			gsl_vector_set(H, j, input_output(iop, gsl_vector_get(X, j))); 
 
 			if(i % (int) (1./dt + 0.5) == 0){
-				fprintf(f,"%.5e\t", gsl_vector_get(H, j));
+				//fprintf(f,"%.4f\t", gsl_vector_get(H, j));
 				//fprintf(g,"%.5e,", gsl_matrix_get(S, i, j));
-				//fprintf(n,"%.5e,", gsl_matrix_get(IN, i, j));
+				fprintf(f,"%.4f\t", gsl_matrix_get(S, i, j));
 			}
 		}
 		if(i % (int) (1./dt + 0.5) == 0)
@@ -416,33 +400,32 @@ int main(int argc, char *argv[])
  	}
 	
 	
-	fprintf(q, "%.5e\t%.5e\t%.5e\n", scf, gsl_vector_min(H), gsl_vector_max(H));
+	//fprintf(q, "%.5e\t%.5e\t%.5e\n", scf, gsl_vector_min(H), gsl_vector_max(H));
     //printf("Trial number %d and there are %d attractors.\n", trials, n_attractors);    
 
-    for(int i = 0; i < regions; i++)
+    /*for(int i = 0; i < regions; i++)
     {
         gsl_matrix_set(AM, i, n_attractors, gsl_vector_get(H,i));
         gsl_matrix_set(NMDA, i, n_attractors, gsl_matrix_get(S,L,i));
      }
-    n_attractors++;
+    n_attractors++;*/
 
-	gsl_matrix_free(IN);
 	gsl_matrix_free(S);
 	gsl_vector_free(X);
 	gsl_vector_free(H);
 	//}
 	}	
-	sprintf(fname, "attractors_matrix_scf=%.3f_sigma=%.3f", scf, sigma);
+	/*sprintf(fname, "attractors_matrix_scf=%.3f_sigma=%.3f", scf, sigma);
 	fprint_matrix(AM, fname, &regions, &n_attractors);
 	gsl_matrix_free(AM);
 	sprintf(fname, "nmda_matrix_scf=%.3f_sigma=%.3f", scf, sigma);
 	fprint_matrix(NMDA, fname, &regions, &n_attractors);
-	gsl_matrix_free(NMDA);
+	gsl_matrix_free(NMDA);*/
 	fclose(f);
 	//fclose(g);
-	fclose(q);
+	//fclose(q);
 	//fclose(n);
-    n_attractors = 0;
+    //n_attractors = 0;
 
 	gsl_matrix_free(C);
     //printf("The number of attractors is: %d.\n", n_attractors);
@@ -463,5 +446,4 @@ int main(int argc, char *argv[])
 	<<heun>>
 	<<read matrix>>
 	<<fprint matrix>>
-    <<noise dot>>
 	<<main program>>
