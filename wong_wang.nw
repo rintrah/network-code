@@ -22,7 +22,10 @@ order to use vectors and matrices.
 #include <gsl/gsl_blas.h>
 
 #define MAXSIZE 5000*10000
-#define FLAG 2
+#define FR 0
+#define NMDA 0
+#define FRMATRIX 1
+#define NMATRIX 0
 
 @ We define three structures: \textit{io\_parameters},
 \textit{kinectic\_parameteres}, and \textit{synaptic\_couplings}. 
@@ -302,21 +305,23 @@ int main(int argc, char *argv[])
 	gsl_matrix *C	= fread_matrix(name, &regions, &regions);
 	//fprint_matrix(C, "gsl_matrix.csv", &regions, &regions);
 
-    #if FLAG == 2
-	    //gsl_matrix *AM	    = gsl_matrix_alloc(regions, n_trials);
+    #if FRMATRIX == 1
+	    gsl_matrix *AM	    = gsl_matrix_alloc(regions, n_trials);
+    #endif
+ 
+    #if NMATRIX == 1
 	    gsl_matrix *NMDA	= gsl_matrix_alloc(regions, n_trials);
     #endif 
 
-    #if FLAG == 1 
+    #if FR == 1 
 	    sprintf(fname, "fr_scf=%.3f_sigma=%.3f", scf, sigma);
 	    FILE *f = fopen(fname, "w");
     #endif
-	//sprintf(fname, "nmda_scf=%.2f", scf);
-	//FILE *g = fopen(fname, "w");
-	//sprintf(fname, "max_min_scf=%.3f_sigma=%.3f", scf, sigma);
-	//FILE *q = fopen(fname, "w");
-	//sprintf(fname, "noise_scf=%.2f", scf);
-	//FILE *n = fopen(fname, "w");
+
+    #if NMDA == 1
+	    sprintf(fname, "nmda_scf=%.3f_sigam=%.3f", scf, sigma);
+	    FILE *g = fopen(fname, "w");
+    #endif 
 
 	for(int trials = 0; trials < n_trials; trials++)
 	{
@@ -333,40 +338,49 @@ int main(int argc, char *argv[])
 		gsl_vector_set(H, i, input_output(iop, gsl_vector_get(X, i))); 
  	} 	
 
-	//fprintf(f, "%5e\t", 0.);
-    #if FLAG == 1
+    #if FR == 1
 	    fprintf(f, "%.4f\t", 0.);
     #endif
-	//fprintf(g, "%5e,", 0.);
-	//fprintf(n, "%5e,", 0.);
-	
+
+    #if NMDA == 1
+	    fprintf(g, "%4f\t,", 0.);
+    #endif
+
+    #if (FR == 1) || (NMDA == 1)	
 	for(int i = 0; i < regions; i++)
 	{ 	
-		//fprintf(f,"%.5e\t", gsl_vector_get(H,i));
-		//fprintf(f,"%.4f\t", gsl_vector_get(H,i));
-		//fprintf(g,"%.5e,", gsl_matrix_get(S,0,i));
-        #if FLAG == 1
-		    fprintf(f,"%.4f\t", gsl_matrix_get(S,0,i));
+        #if FR == 1
+		    fprintf(f,"%.4f\t", gsl_vector_get(H,i));
+        #endif
+
+        #if NMDA == 1
+		    fprintf(g,"%.4f\t", gsl_matrix_get(S,0,i));
         #endif
  	} 
+    #endif
     
-	#if FLAG == 1
+	#if FR == 1
 	    fprintf(f, "\n");
     #endif
-	//fprintf(g, "\n");
-	//fprintf(n, "\n");
+
+    #if NMDA == 1
+	    fprintf(g, "\n");
+    #endif 
 
 	for(int i = 1; i <= L; i++)
 	{
+        #if (FR == 1) || (NMDA == 1)	
 		if(i % (int) (1./dt + 0.5) == 0)
  		{
-			//fprintf(f,"%.5e\t", i*dt);
-            #if FLAG == 1
+            #if FR == 1
 			    fprintf(f,"%.4f\t", i*dt);
             #endif 
-			//fprintf(g,"%.5e,", i*dt);
-			//fprintf(n,"%.5e,", i*dt);
+
+            #if NMDA == 1
+			    fprintf(g,"%.4f\t,", i*dt);
+            #endif
  		}
+        #endif 
 		for(int j = 0; j < regions; j++)
  		{
 			double old_S  = 0; 
@@ -398,32 +412,43 @@ int main(int argc, char *argv[])
 			gsl_vector_set(H, j, input_output(iop, gsl_vector_get(X, j))); 
 
 			if(i % (int) (1./dt + 0.5) == 0){
-				//fprintf(f,"%.4f\t", gsl_vector_get(H, j));
-				//fprintf(g,"%.5e,", gsl_matrix_get(S, i, j));
-                #if FLAG == 1
-				    fprintf(f,"%.4f\t", gsl_matrix_get(S, i, j));
+                #if FR == 1
+				    fprintf(f,"%.4f\t", gsl_vector_get(H, j));
+                #endif
+
+                #if NMDA == 1
+				    fprintf(g,"%.4f\t", gsl_matrix_get(S, i, j));
                 #endif 
 			}
 		}
+        #if (FR == 1) || (NMDA == 1)	
 		if(i % (int) (1./dt + 0.5) == 0)
  		{
-            #if FLAG == 1
+            #if FR == 1
 			    fprintf(f,"\n");
-            #endif 
-			//fprintf(g,"\n");
-			//fprintf(n,"\n");
+            #endif
+    
+            #if NMDA == 1             
+			    fprintf(g,"\n");
+            #endif
 		}
+        #endif
  	}
 	
 	
 	//fprintf(q, "%.5e\t%.5e\t%.5e\n", scf, gsl_vector_min(H), gsl_vector_max(H));
     //printf("Trial number %d and there are %d attractors.\n", trials, n_attractors);    
 
-    #if  FLAG == 2
+    #if (FRMATRIX == 1) || (NMATRIX == 1)
         for(int i = 0; i < regions; i++)
         {
-            //gsl_matrix_set(AM, i, n_attractors, gsl_vector_get(H,i));
-            gsl_matrix_set(NMDA, i, n_attractors, gsl_matrix_get(S,L,i));
+            #if FRMATRIX == 1
+                gsl_matrix_set(AM, i, n_attractors, gsl_vector_get(H,i));
+            #endif
+            
+            #if NMATRIX == 1
+                gsl_matrix_set(NMDA, i, n_attractors, gsl_matrix_get(S,L,i));
+            #endif 
         }
         n_attractors++;
     #endif    
@@ -433,22 +458,27 @@ int main(int argc, char *argv[])
 	gsl_vector_free(H);
 	//}
 	}	
-	/*sprintf(fname, "attractors_matrix_scf=%.3f_sigma=%.3f", scf, sigma);
-	fprint_matrix(AM, fname, &regions, &n_attractors);
-	gsl_matrix_free(AM);*/
     
-    #if FLAG == 2 
+    #if FRMATRIX == 1
+	    sprintf(fname, "attractors_matrix_scf=%.3f_sigma=%.3f", scf, sigma);
+	    fprint_matrix(AM, fname, &regions, &n_attractors);
+	    gsl_matrix_free(AM);
+    #endif
+    
+    #if NMATRIX == 1 
 	    sprintf(fname, "nmda_matrix_scf=%.3f_sigma=%.3f", scf, sigma);  // To assign a new value to an old variable can produce errors.
 	    fprint_matrix(NMDA, fname, &regions, &n_attractors);
 	    gsl_matrix_free(NMDA);
     #endif 
 
-    #if FLAG == 1
+    #if FR == 1
 	    fclose(f);
     #endif 
-	//fclose(g);
-	//fclose(q);
-	//fclose(n);
+
+    #if NMDA == 1
+	    fclose(g);
+    #endif
+
     n_attractors = 0;
 
 	gsl_matrix_free(C);
