@@ -23,8 +23,8 @@ order to use vectors and matrices.
 
 #define MAXSIZE 5000*10000
 #define FR 0
-#define NMDA 0
-#define FRMATRIX 1
+#define NMDA 1
+#define FRMATRIX 0
 #define NMATRIX 0
 
 @ We define three structures: \textit{io\_parameters},
@@ -309,8 +309,8 @@ int main(int argc, char *argv[])
 	    gsl_matrix *AM	    = gsl_matrix_alloc(regions, n_trials);
     #endif
  
-    #if NMATRIX == 1
-	    gsl_matrix *NMDA	= gsl_matrix_alloc(regions, n_trials);
+    #if NMATRIX == 1  
+	    gsl_matrix *NMDAM	= gsl_matrix_alloc(regions, n_trials);
     #endif 
 
     #if FR == 1 
@@ -319,7 +319,7 @@ int main(int argc, char *argv[])
     #endif
 
     #if NMDA == 1
-	    sprintf(fname, "nmda_scf=%.3f_sigam=%.3f", scf, sigma);
+	    sprintf(fname, "nmda_scf=%.3f_sigma=%.3f", scf, sigma);
 	    FILE *g = fopen(fname, "w");
     #endif 
 
@@ -343,7 +343,7 @@ int main(int argc, char *argv[])
     #endif
 
     #if NMDA == 1
-	    fprintf(g, "%4f\t,", 0.);
+	    fprintf(g, "%.4f\t", 0.);
     #endif
 
     #if (FR == 1) || (NMDA == 1)	
@@ -377,7 +377,7 @@ int main(int argc, char *argv[])
             #endif 
 
             #if NMDA == 1
-			    fprintf(g,"%.4f\t,", i*dt);
+			    fprintf(g,"%.4f\t", i*dt);
             #endif
  		}
         #endif 
@@ -447,7 +447,7 @@ int main(int argc, char *argv[])
             #endif
             
             #if NMATRIX == 1
-                gsl_matrix_set(NMDA, i, n_attractors, gsl_matrix_get(S,L,i));
+                gsl_matrix_set(NMDAM, i, n_attractors, gsl_matrix_get(S,L,i));
             #endif 
         }
         n_attractors++;
@@ -467,8 +467,8 @@ int main(int argc, char *argv[])
     
     #if NMATRIX == 1 
 	    sprintf(fname, "nmda_matrix_scf=%.3f_sigma=%.3f", scf, sigma);  // To assign a new value to an old variable can produce errors.
-	    fprint_matrix(NMDA, fname, &regions, &n_attractors);
-	    gsl_matrix_free(NMDA);
+	    fprint_matrix(NMDAM, fname, &regions, &n_attractors);
+	    gsl_matrix_free(NMDAM);
     #endif 
 
     #if FR == 1
