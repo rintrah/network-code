@@ -56,21 +56,18 @@ typedef struct{
 \begin{align*}
 	\frac{\mathrm{d}S}{\mathrm{d}t} &= -\frac{S}{\tau_S} + (1 - S)\gamma H(S),
 \end{align*}
-we use the Heun's method. 
+we use the Euler's method. 
 
-The Heun's method for calculating the numerical solution to the initial value problem is:
+The Euler's method for calculating the numerical solution to the initial value problem is:
 
 \begin{align*}
 	\dot{y}(t) &= f(t,y(t)\\
 	y(t_0) &= y_0, 
 \end{align*}
 
-to first calculate the intermediate value $\tilde{y_{i+1}}$ and the final approximation $y_{i+1}$ at the 
-next integration point.
 
 \begin{align*}
-	\tilde{y_{i+1}} &= y_i + h f(t_i,y_i) \\
-	y_{i+1} &= y_i + \frac{h}{2} (f(t_i,y_i) + f(t_{i+1}, \tilde{y_{i+1}}))
+	y_{i+1} &= y_i + h f(t_i,y_i) \\
 \end{align*}
 
 The function \textit{S\_dot} implements  the differential equation:
@@ -83,21 +80,17 @@ double S_dot(double S, kinectic_parameters p, double H)
 return  r;
 }
 
-@ And the function \textit{heun} integrates using Heun's method.
+@ And the function \textit{euler} integrates using Euler's method.
 
-<<heun>>=
-double heun(double y, double h, kinectic_parameters p, io_parameters io, 
-		synaptic_couplings sc, double H, double I0, double sigma, double noise) 
+<<euler>>=
+double euler(double y, double h, kinectic_parameters p, 
+		synaptic_couplings sc, double H, double sigma, double noise) 
 {
-	double r = 0, y_tilde = 0, x = 0, H_tilde = 0;
+	double y_new = 0;
 
-	y_tilde = y + h*S_dot(y,p,H) + sigma*noise; 
-	x 		= sc.J1*y_tilde + I0;
-	H_tilde = input_output(io, x);
-	r 		= y + h/2.0*(S_dot(y,p,H) + S_dot(y_tilde,p,H_tilde)) + sigma*noise;
+	y_new = y + h*S_dot(y,p,H) + sigma*noise; 
 
-	return r;
-    //return y_tilde;
+    return y_new;
 }
 
 @ In order to understand the behavior of the differential equation $\frac{\mathrm{d}S}{\mathrm{d}t} = -\frac{S}{\tau_S} +
@@ -263,12 +256,12 @@ void fprint_matrix(const gsl_matrix *m, char *filename, int *rows, int *cols)
 <<main program>>=
 int main(int argc, char *argv[])
 {
-	double dt, tspan, sigma, scf;
+	double dt, tspan, sigma, scf, wint;
 
-	if(argc < 6)
+	if(argc < 7)
 	{
 		printf("Not enough arguments!\n");
-		printf("Arguments: <time step> <time span> <scaling factor> <noise level> <number of trials>.\n");
+		printf("Arguments: <time step> <time span> <scaling factor> <noise level> <number of trials> <w int>.\n");
 		exit(-1);
 	} 
 
@@ -276,6 +269,8 @@ int main(int argc, char *argv[])
 	tspan 	= atof(argv[2]);
 	scf 	= atof(argv[3]);
 	sigma 	= atof(argv[4]);
+    wint    = atof(argv[6]);
+    
 
 	int regions = 66, n_attractors = 0,
             n_trials = 0, L = ceil(tspan/dt);
@@ -296,7 +291,7 @@ int main(int argc, char *argv[])
 	gsl_rng_set(r, time(NULL));
 		
 	io_parameters iop ={.a = 270, .b = 108, .d = 0.154};
-	kinectic_parameters kp = {.gamma = 0.641/1000.,    // We divide by 1000 in order to express everything in milliseconds.
+	kinectic_parameters kp =  {.gamma = 0.641,    // We divide by 1000 in order to express everything in milliseconds.
                  .tau_S = 100}; 
 	synaptic_couplings sc = {.J1 = 0.2609};
 
@@ -333,8 +328,9 @@ int main(int argc, char *argv[])
 
 	for(int i = 0; i < regions; i++)
 	{
-		gsl_matrix_set(S, 0, i, gsl_rng_uniform(r));
-		gsl_vector_set(X, i, sc.J1*gsl_matrix_get(S, 0, i)  + I0); 
+		//gsl_matrix_set(S, 0, i, gsl_rng_uniform(r));
+		gsl_matrix_set(S, 0, i, 0.001);
+		gsl_vector_set(X, i, wint*sc.J1*gsl_matrix_get(S, 0, i)  + I0); 
 		gsl_vector_set(H, i, input_output(iop, gsl_vector_get(X, i))); 
  	} 	
 
@@ -388,10 +384,14 @@ int main(int argc, char *argv[])
 
 			old_S = gsl_matrix_get(S, i-1, j);
 	 		
-			gsl_matrix_set(S, i, j, heun(old_S, dt, kp, iop, sc, gsl_vector_get(H, j), I0, sigma, noise));
+			gsl_matrix_set(S, i, j, euler(old_S, dt, kp, sc, gsl_vector_get(H, j)/1000., sigma, noise));
 
 			if (gsl_matrix_get(S, i, j) > 1)
 				gsl_matrix_set(S, i, j, 1);
+
+			if (gsl_matrix_get(S, i, j) < 0)
+				gsl_matrix_set(S, i, j, 0);
+
 
 		}
 		for(int j = 0; j < regions; j++)
@@ -407,7 +407,7 @@ int main(int argc, char *argv[])
 	 			}
 			}		
 	
-			gsl_vector_set(X, j, sc.J1*gsl_matrix_get(S, i, j)  + I0 +  RI);
+			gsl_vector_set(X, j, wint*sc.J1*gsl_matrix_get(S, i, j)  + I0 +  RI);
 
 			gsl_vector_set(H, j, input_output(iop, gsl_vector_get(X, j))); 
 
@@ -497,7 +497,7 @@ int main(int argc, char *argv[])
 	<<synaptic>>
 	<<f-i function>>
 	<<s dot>>
-	<<heun>>
+	<<euler>>
 	<<read matrix>>
 	<<fprint matrix>>
 	<<main program>>
